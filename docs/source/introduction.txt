@@ -42,5 +42,7 @@ Features
   node capacity, etc.
 * STR packing / bulk loading.
 
+Warnings
+------------------------------------------------------------------------------
 
-
+* The library is not thread safe: updates and queries should only be run from within mutexes.
