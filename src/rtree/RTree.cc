@@ -433,7 +433,7 @@ bool SpatialIndex::RTree::RTree::deleteData(const IShape& shape, id_type id)
 }
 
 
-void SpatialIndex::RTree::RTree::internalNodesQuery(const IShape& query, IVisitor& v)
+void SpatialIndex::RTree::RTree::internalNodesQuery (const IShape& query, IVisitor& v, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const
 {
 	if (query.getDimension() != m_dimension) throw Tools::IllegalArgumentException("containsWhatQuery: Shape has the wrong number of dimensions.");
 
@@ -444,7 +444,7 @@ void SpatialIndex::RTree::RTree::internalNodesQuery(const IShape& query, IVisito
 	try
 	{
 		std::stack<NodePtr> st;
-		NodePtr root = readNode(m_rootID);
+		NodePtr root = readNode(m_rootID, index_pool, leaf_pool);
 		st.push(root);
 
 		while (! st.empty())
@@ -454,14 +454,14 @@ void SpatialIndex::RTree::RTree::internalNodesQuery(const IShape& query, IVisito
 			if(query.containsShape(n->m_nodeMBR))
 			{
 				IdVisitor vId = IdVisitor();
-				visitSubTree(n, vId);
+				visitSubTree(n, vId, index_pool, leaf_pool);
 				const uint64_t nObj = vId.GetResultCount();
 				uint64_t *obj = new uint64_t[nObj];
 				std::copy(vId.GetResults().begin(), vId.GetResults().end(), obj);
 
 				Data data = Data((uint32_t)(sizeof(uint64_t) * nObj), (uint8_t *) obj, n->m_nodeMBR, n->getIdentifier());
 				v.visitData(data);
-				++(m_stats.m_u64QueryResults);
+				// ++(m_stats.m_u64QueryResults);
 			}
 			else
 			{
@@ -473,7 +473,7 @@ void SpatialIndex::RTree::RTree::internalNodesQuery(const IShape& query, IVisito
 						{
 							Data data = Data(sizeof(id_type), (uint8_t *) &n->m_pIdentifier[cChild], *(n->m_ptrMBR[cChild]), n->getIdentifier());
 							v.visitData(data);
-							++(m_stats.m_u64QueryResults);
+							// ++(m_stats.m_u64QueryResults);
 						}
 					}
 				}
@@ -483,7 +483,7 @@ void SpatialIndex::RTree::RTree::internalNodesQuery(const IShape& query, IVisito
 					{
 						for (uint32_t cChild = 0; cChild < n->m_children; ++cChild)
 						{
-							st.push(readNode(n->m_pIdentifier[cChild]));
+							st.push(readNode(n->m_pIdentifier[cChild], index_pool, leaf_pool));
 						}
 					}
 				}
@@ -497,14 +497,14 @@ void SpatialIndex::RTree::RTree::internalNodesQuery(const IShape& query, IVisito
 	}
 }
 
-void SpatialIndex::RTree::RTree::containsWhatQuery(const IShape& query, IVisitor& v)
+void SpatialIndex::RTree::RTree::containsWhatQuery(const IShape& query, IVisitor& v, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const
 {
 	if (query.getDimension() != m_dimension) throw Tools::IllegalArgumentException("containsWhatQuery: Shape has the wrong number of dimensions.");
 
 	try
 	{
 		std::stack<NodePtr> st;
-		NodePtr root = readNode(m_rootID);
+		NodePtr root = readNode(m_rootID, index_pool, leaf_pool);
 		st.push(root);
 
 		while (! st.empty())
@@ -521,7 +521,7 @@ void SpatialIndex::RTree::RTree::containsWhatQuery(const IShape& query, IVisitor
 					{
 						Data data = Data(n->m_pDataLength[cChild], n->m_pData[cChild], *(n->m_ptrMBR[cChild]), n->m_pIdentifier[cChild]);
 						v.visitData(data);
-						++(m_stats.m_u64QueryResults);
+						// ++(m_stats.m_u64QueryResults);
 					}
 				}
 			}
@@ -529,7 +529,7 @@ void SpatialIndex::RTree::RTree::containsWhatQuery(const IShape& query, IVisitor
 			{
 				if(query.containsShape(n->m_nodeMBR))
 				{
-					visitSubTree(n, v);
+					visitSubTree(n, v, index_pool, leaf_pool);
 				}
 				else if(query.intersectsShape(n->m_nodeMBR))
 				{
@@ -537,7 +537,7 @@ void SpatialIndex::RTree::RTree::containsWhatQuery(const IShape& query, IVisitor
 
 					for (uint32_t cChild = 0; cChild < n->m_children; ++cChild)
 					{
-						st.push(readNode(n->m_pIdentifier[cChild]));
+						st.push(readNode(n->m_pIdentifier[cChild], index_pool, leaf_pool));
 					}
 				}
 			}
@@ -549,20 +549,20 @@ void SpatialIndex::RTree::RTree::containsWhatQuery(const IShape& query, IVisitor
 		throw;
 	}
 }
-void SpatialIndex::RTree::RTree::intersectsWithQuery(const IShape& query, IVisitor& v)
+void SpatialIndex::RTree::RTree::intersectsWithQuery(const IShape& query, IVisitor& v, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const
 {
 	if (query.getDimension() != m_dimension) throw Tools::IllegalArgumentException("intersectsWithQuery: Shape has the wrong number of dimensions.");
-	rangeQuery(IntersectionQuery, query, v);
+	rangeQuery(IntersectionQuery, query, v, index_pool, leaf_pool);
 }
 
-void SpatialIndex::RTree::RTree::pointLocationQuery(const Point& query, IVisitor& v)
+void SpatialIndex::RTree::RTree::pointLocationQuery(const Point& query,  IVisitor& v, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const
 {
 	if (query.m_dimension != m_dimension) throw Tools::IllegalArgumentException("pointLocationQuery: Shape has the wrong number of dimensions.");
 	Region r(query, query);
-	rangeQuery(IntersectionQuery, r, v);
+	rangeQuery(IntersectionQuery, r, v, index_pool, leaf_pool);
 }
 
-void SpatialIndex::RTree::RTree::nearestNeighborQuery(uint32_t k, const IShape& query, IVisitor& v, INearestNeighborComparator& nnc)
+void SpatialIndex::RTree::RTree::nearestNeighborQuery(uint32_t k, const IShape& query, IVisitor& v, INearestNeighborComparator &nnc, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const
 {
 	if (query.getDimension() != m_dimension) throw Tools::IllegalArgumentException("nearestNeighborQuery: Shape has the wrong number of dimensions.");
 
@@ -587,7 +587,7 @@ void SpatialIndex::RTree::RTree::nearestNeighborQuery(uint32_t k, const IShape& 
 		if (pFirst->m_pEntry == nullptr)
 		{
 			// n is a leaf or an index.
-			NodePtr n = readNode(pFirst->m_id);
+			NodePtr n = readNode(pFirst->m_id, index_pool, leaf_pool);
 			v.visitNode(*n);
 
 			for (uint32_t cChild = 0; cChild < n->m_children; ++cChild)
@@ -608,7 +608,7 @@ void SpatialIndex::RTree::RTree::nearestNeighborQuery(uint32_t k, const IShape& 
 		else
 		{
 			v.visitData(*(static_cast<IData*>(pFirst->m_pEntry)));
-			++(m_stats.m_u64QueryResults);
+			// ++(m_stats.m_u64QueryResults);
 			++count;
 			knearest = pFirst->m_minDist;
 			delete pFirst->m_pEntry;
@@ -625,11 +625,11 @@ void SpatialIndex::RTree::RTree::nearestNeighborQuery(uint32_t k, const IShape& 
 	}
 }
 
-void SpatialIndex::RTree::RTree::nearestNeighborQuery(uint32_t k, const IShape& query, IVisitor& v)
+void SpatialIndex::RTree::RTree::nearestNeighborQuery(uint32_t k, const IShape& query, IVisitor& v, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const
 {
 	if (query.getDimension() != m_dimension) throw Tools::IllegalArgumentException("nearestNeighborQuery: Shape has the wrong number of dimensions.");
 	NNComparator nnc;
-	nearestNeighborQuery(k, query, v, nnc);
+	nearestNeighborQuery(k, query, v, nnc, index_pool, leaf_pool);
 }
 
 
@@ -1358,8 +1358,15 @@ SpatialIndex::id_type SpatialIndex::RTree::RTree::writeNode(Node* n)
 	return page;
 }
 
-SpatialIndex::RTree::NodePtr SpatialIndex::RTree::RTree::readNode(id_type page)
-{
+SpatialIndex::RTree::NodePtr SpatialIndex::RTree::RTree::readNode(id_type page){
+	return readNode(page, m_indexPool, m_leafPool);
+}
+
+SpatialIndex::RTree::NodePtr SpatialIndex::RTree::RTree::readNode(
+	id_type page,
+	Tools::PointerPool<Node> &index_pool,
+	Tools::PointerPool<Node> &leaf_pool
+) const {
 	uint32_t dataLength;
 	uint8_t* buffer;
 
@@ -1380,21 +1387,21 @@ SpatialIndex::RTree::NodePtr SpatialIndex::RTree::RTree::readNode(id_type page)
 
 		NodePtr n;
 
-		if (nodeType == PersistentIndex) n = m_indexPool.acquire();
-		else if (nodeType == PersistentLeaf) n = m_leafPool.acquire();
+		if (nodeType == PersistentIndex) n = index_pool.acquire();
+		else if (nodeType == PersistentLeaf) n = leaf_pool.acquire();
 		else throw Tools::IllegalStateException("readNode: failed reading the correct node type information");
 
 		if (n.get() == nullptr)
 		{
-			if (nodeType == PersistentIndex) n = NodePtr(new Index(this, -1, 0), &m_indexPool);
-			else if (nodeType == PersistentLeaf) n = NodePtr(new Leaf(this, -1), &m_leafPool);
+			if (nodeType == PersistentIndex) n = NodePtr(new Index(const_cast<SpatialIndex::RTree::RTree*>(this), -1, 0), &index_pool);
+			else if (nodeType == PersistentLeaf) n = NodePtr(new Leaf(const_cast<SpatialIndex::RTree::RTree*>(this), -1), &leaf_pool);
 		}
 
 		//n->m_pTree = this;
 		n->m_identifier = page;
 		n->loadFromByteArray(buffer);
 
-		++(m_stats.m_u64Reads);
+		// ++(m_stats.m_u64Reads);
 
 		for (size_t cIndex = 0; cIndex < m_readNodeCommands.size(); ++cIndex)
 		{
@@ -1432,10 +1439,15 @@ void SpatialIndex::RTree::RTree::deleteNode(Node* n)
 	}
 }
 
-void SpatialIndex::RTree::RTree::rangeQuery(RangeQueryType type, const IShape& query, IVisitor& v)
-{
+void SpatialIndex::RTree::RTree::rangeQuery(
+	RangeQueryType type,
+	const IShape& query,
+	IVisitor& v,
+	Tools::PointerPool<Node> &index_pool,
+	Tools::PointerPool<Node> &leaf_pool
+) const {
 	std::stack<NodePtr> st;
-	NodePtr root = readNode(m_rootID);
+	NodePtr root = readNode(m_rootID, index_pool, leaf_pool);
 
 	if (root->m_children > 0 && query.intersectsShape(root->m_nodeMBR)) st.push(root);
 
@@ -1457,7 +1469,7 @@ void SpatialIndex::RTree::RTree::rangeQuery(RangeQueryType type, const IShape& q
 				{
 					Data data = Data(n->m_pDataLength[cChild], n->m_pData[cChild], *(n->m_ptrMBR[cChild]), n->m_pIdentifier[cChild]);
 					v.visitData(data);
-					++(m_stats.m_u64QueryResults);
+					// ++(m_stats.m_u64QueryResults);
 				}
 			}
 		}
@@ -1467,7 +1479,7 @@ void SpatialIndex::RTree::RTree::rangeQuery(RangeQueryType type, const IShape& q
 
 			for (uint32_t cChild = 0; cChild < n->m_children; ++cChild)
 			{
-				if (query.intersectsShape(*(n->m_ptrMBR[cChild]))) st.push(readNode(n->m_pIdentifier[cChild]));
+				if (query.intersectsShape(*(n->m_ptrMBR[cChild]))) st.push(readNode(n->m_pIdentifier[cChild], index_pool, leaf_pool));
 			}
 		}
 	}
@@ -1515,7 +1527,7 @@ void SpatialIndex::RTree::RTree::selfJoinQuery(id_type id1, id_type id2, const R
 	}
 }
 
-void SpatialIndex::RTree::RTree::visitSubTree(NodePtr subTree, IVisitor& v)
+void SpatialIndex::RTree::RTree::visitSubTree(const NodePtr subTree, IVisitor& v, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const
 {
 	std::stack<NodePtr> st;
 	st.push(subTree);
@@ -1531,14 +1543,14 @@ void SpatialIndex::RTree::RTree::visitSubTree(NodePtr subTree, IVisitor& v)
 			{
 				Data data = Data(n->m_pDataLength[cChild], n->m_pData[cChild], *(n->m_ptrMBR[cChild]), n->m_pIdentifier[cChild]);
 				v.visitData(data);
-				++(m_stats.m_u64QueryResults);
+				// ++(m_stats.m_u64QueryResults);
 			}
 		}
 		else
 		{
 			for (uint32_t cChild = 0; cChild < n->m_children; ++cChild)
 			{
-				st.push(readNode(n->m_pIdentifier[cChild]));
+				st.push(readNode(n->m_pIdentifier[cChild], index_pool, leaf_pool));
 			}
 		}
 	}
@@ -1575,4 +1587,26 @@ std::ostream& SpatialIndex::RTree::operator<<(std::ostream& os, const RTree& t)
 	#endif
 
 	return os;
+}
+
+
+
+//Versions of functions using class's internal memory
+void SpatialIndex::RTree::RTree::internalNodesQuery(const IShape& query, IVisitor& v){
+	internalNodesQuery(query, v, m_indexPool, m_leafPool);
+}
+void SpatialIndex::RTree::RTree::containsWhatQuery(const IShape& query, IVisitor& v){
+	containsWhatQuery(query, v, m_indexPool, m_leafPool);
+}
+void SpatialIndex::RTree::RTree::intersectsWithQuery(const IShape& query, IVisitor& v){
+	intersectsWithQuery(query, v, m_indexPool, m_leafPool);
+}
+void SpatialIndex::RTree::RTree::pointLocationQuery(const Point& query, IVisitor& v){
+	pointLocationQuery(query, v, m_indexPool, m_leafPool);
+}
+void SpatialIndex::RTree::RTree::nearestNeighborQuery(uint32_t k, const IShape& query, IVisitor& v, INearestNeighborComparator &nnc){
+	nearestNeighborQuery(k, query, v, nnc, m_indexPool, m_leafPool);
+}
+void SpatialIndex::RTree::RTree::nearestNeighborQuery(uint32_t k, const IShape& query, IVisitor& v){
+	nearestNeighborQuery(k, query, v, m_indexPool, m_leafPool);
 }

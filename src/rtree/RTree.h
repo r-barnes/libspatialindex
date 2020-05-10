@@ -70,13 +70,23 @@ namespace SpatialIndex
 			//
 			virtual void insertData(uint32_t len, const uint8_t* pData, const IShape& shape, id_type shapeIdentifier) ;
 			virtual bool deleteData(const IShape& shape, id_type id) ;
-			virtual void internalNodesQuery(const IShape& query, IVisitor& v) ;
-			virtual void containsWhatQuery(const IShape& query, IVisitor& v) ;
-			virtual void intersectsWithQuery(const IShape& query, IVisitor& v) ;
-			virtual void pointLocationQuery(const Point& query, IVisitor& v) ;
+
+			virtual void internalNodesQuery(const IShape& query, IVisitor& v);
+			virtual void containsWhatQuery(const IShape& query, IVisitor& v);
+			virtual void intersectsWithQuery(const IShape& query, IVisitor& v);
+			virtual void pointLocationQuery(const Point& query, IVisitor& v);
 			virtual void nearestNeighborQuery(uint32_t k, const IShape& query, IVisitor& v, INearestNeighborComparator&);
 			virtual void nearestNeighborQuery(uint32_t k, const IShape& query, IVisitor& v);
-			virtual void selfJoinQuery(const IShape& s, IVisitor& v) ;
+			virtual void selfJoinQuery(const IShape& s, IVisitor& v);
+
+			void internalNodesQuery (const IShape& query, IVisitor& v, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const;
+			void containsWhatQuery  (const IShape& query, IVisitor& v, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const;
+			void intersectsWithQuery(const IShape& query, IVisitor& v, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const;
+			void pointLocationQuery (const Point& query,  IVisitor& v, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const;
+			void nearestNeighborQuery(uint32_t k, const IShape& query, IVisitor& v, INearestNeighborComparator&, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const;
+			void nearestNeighborQuery(uint32_t k, const IShape& query, IVisitor& v, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const;
+			// void selfJoinQuery      (const IShape& s,     IVisitor& v, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const;
+
 			virtual void queryStrategy(IQueryStrategy& qs) ;
 			virtual void getIndexProperties(Tools::PropertySet& out) const ;
 			virtual void addCommand(ICommand* pCommand, CommandType ct) ;
@@ -96,11 +106,13 @@ namespace SpatialIndex
 
 			id_type writeNode(Node*);
 			NodePtr readNode(id_type page);
+			NodePtr readNode(id_type page, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const;
 			void deleteNode(Node*);
 
-			void rangeQuery(RangeQueryType type, const IShape& query, IVisitor& v);
+			void rangeQuery(RangeQueryType type, const IShape& query, IVisitor& v, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const;
+
 			void selfJoinQuery(id_type id1, id_type id2, const Region& r, IVisitor& vis);
-			void visitSubTree(NodePtr subTree, IVisitor& v);
+			void visitSubTree(const NodePtr subTree, IVisitor& v, Tools::PointerPool<Node> &index_pool, Tools::PointerPool<Node> &leaf_pool) const;
 
 			IStorageManager* m_pStorageManager;
 
@@ -161,12 +173,12 @@ namespace SpatialIndex
 			class NNComparator : public INearestNeighborComparator
 			{
 			public:
-				double getMinimumDistance(const IShape& query, const IShape& entry) 
+				double getMinimumDistance(const IShape& query, const IShape& entry)
 				{
 					return query.getMinimumDistance(entry);
 				}
 
-				double getMinimumDistance(const IShape& query, const IData& data) 
+				double getMinimumDistance(const IShape& query, const IData& data)
 				{
 					IShape* pS;
 					data.getShape(&pS);
